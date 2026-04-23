@@ -1,0 +1,39 @@
+# Gradle
+.gradle/
+build/
+app/build/
+cache/
+**/build/
+cache/build/
+cache/gradle/
+
+# Android
+*.apk
+*.aab
+*.aar
+local.properties
+*.jks
+*.keystore
+*.pem
+*.pk8
+
+# IDE
+.idea/
+.vscode/
+.kotlin/
+*.iml
+*.swp
+*.swo
+*~
+
+# System
+.DS_Store
+.AppleDouble
+
+# Logs
+*.log
+
+# User files
+PLAN.md
+backup/
+keys/

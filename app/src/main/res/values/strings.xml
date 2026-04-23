@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MAP</string>
+    <string name="status_connected">Подключено</string>
+    <string name="status_disconnected">Отключено</string>
+    <string name="status_inactive">Неактивно</string>
+    <string name="port_default">1080</string>
+    <string name="proxy_active">Прокси активно</string>
+    <string name="proxy_inactive">Прокси неактивно</string>
+    <string name="about_title">О приложении</string>
+    <string name="about_version">Версия: %1$s</string>
+    <string name="about_website">Сайт</string>
+    <string name="about_check_updates">Проверить обновления</string>
+    
+    <!-- Settings strings -->
+    <string name="settings_title">Настройки прокси</string>
+    <string name="settings_port">Порт прокси</string>
+    <string name="settings_protocol">Протокол</string>
+    <string name="settings_language">Язык интерфейса</string>
+    
+    <!-- Buttons -->
+    <string name="btn_start">Запустить</string>
+    <string name="btn_stop">Остановить</string>
+    <string name="btn_settings">Настройки</string>
+    <string name="btn_about">О приложении</string>
+    <string name="btn_save">Сохранить</string>
+    
+    <!-- Error messages -->
+    <string name="error_invalid_port">Неверный порт (1-65535)</string>
+    <string name="error_connection_failed">Ошибка подключения</string>
+    <string name="error_start_failed">Не удалось запустить прокси</string>
+    
+    <!-- Success messages -->
+    <string name="success_started">Прокси запущен</string>
+    <string name="success_stopped">Прокси остановлен</string>
+    <string name="success_saved">Настройки сохранены</string>
+    <string name="update_checking">Проверка обновлений...</string>
+    <string name="update_not_available">У вас установлена актуальная версия</string>
+    <string name="update_available_title">Доступно обновление %1$s</string>
+    <string name="update_download_install">Скачать и установить</string>
+    <string name="update_later">Позже</string>
+    <string name="update_skip_version">Пропустить эту версию</string>
+    <string name="update_download_started">Загрузка обновления началась</string>
+    <string name="update_download_failed">Не удалось скачать обновление</string>
+    <string name="update_verify_failed">Проверка файла не пройдена (SHA-256)</string>
+    <string name="update_install_permission_required">Разрешите установку из неизвестных источников для MAP</string>
+    <string name="update_check_failed">Не удалось проверить обновления: %1$s</string>
+    <string name="update_invalid_signature">Подпись данных обновления не прошла проверку</string>
+    <string name="update_device_not_supported">Это обновление не поддерживается на вашем устройстве</string>
+    <string name="update_app_too_old">Сначала обновитесь до промежуточной версии приложения</string>
+    <string name="sstp_log_enable">Логировать SSTP-подключение</string>
+    <string name="sstp_log_share">Поделиться логом SSTP</string>
+    <string name="sstp_log_share_title">Поделиться логом SSTP</string>
+    <string name="sstp_log_missing">Лог SSTP пока отсутствует</string>
+    <string name="sstp_tun_mtu_hint">MTU TUN (VPN), 1280–1500</string>
+    <string name="sstp_tun_mtu_default">1300</string>
+    <string name="sstp_tun_mtu_invalid">MTU TUN: укажите число от 1280 до 1500</string>
+</resources>

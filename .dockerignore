@@ -1,0 +1,55 @@
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Build outputs
+.gradle/
+app/build/
+build/
+cache/
+*.apk
+*.aab
+*.aar
+
+# IDE and Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation and Metadata
+README.md
+*.md
+LICENSE
+CHANGELOG
+
+# Docker files
+Dockerfile
+docker/
+.dockerignore
+
+# Scripts (unless needed in container)
+scripts/
+Makefile
+
+# Gradle wrapper (already in base image)
+gradlew
+gradlew.bat
+gradle/wrapper/
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+*.orig
+
+# Local configuration
+local.properties
+*.properties
+gradle.properties
+
+# AI and development
+ai_system_prompt.md

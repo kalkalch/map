@@ -1,0 +1,33 @@
+# MAP Android Proxy - Docker Build System
+# ==========================================
+FROM --platform=linux/amd64 gradle:8.10-jdk17
+
+# Set environment variables
+ENV ANDROID_HOME=/opt/android-sdk \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    GRADLE_OPTS="-Dorg.gradle.daemon=false"
+
+# Install required packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Android SDK command-line tools
+RUN mkdir -p $ANDROID_HOME/cmdline-tools && \
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools && \
+    mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip
+
+ENV PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+
+# Accept licenses and install Android SDK components
+RUN yes | sdkmanager --licenses 2>/dev/null || true && \
+    sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+# Set working directory
+WORKDIR /src
+
+# Build command
+ENTRYPOINT ["gradle", "--no-daemon"]
+CMD ["assembleDebug"]

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1976D2</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="accent">#FF5722</color>
+    <color name="status_active">#1B8F3A</color>
+    <color name="status_transition">#B26A00</color>
+    <color name="status_error">#C62828</color>
+    <color name="status_inactive">#757575</color>
+    <color name="status_disabled">#9E9E9E</color>
+    <color name="status_info">#1565C0</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
