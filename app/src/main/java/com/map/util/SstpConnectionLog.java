@@ -74,6 +74,7 @@ public final class SstpConnectionLog {
                 writeSafeLine(out, "SOCKS5 upstream: " + describeSocks5Upstream(settings));
                 writeSafeLine(out, "HTTP upstream: " + describeHttpUpstream(settings));
                 writeSafeLine(out, "Cascade probe host: " + settings.getProxyHealthcheckHost());
+                writeSafeLine(out, "Cascade probe port: " + settings.getProxyHealthcheckPort());
                 writeSafeLine(out, "Cascade probe interval sec: " + settings.getProxyHealthcheckIntervalSec());
                 writeSafeLine(out, "Network: " + describeActiveNetwork(context));
                 writeSafeLine(out, "");
