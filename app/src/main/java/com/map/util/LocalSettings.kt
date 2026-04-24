@@ -41,6 +41,7 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
         const val KEY_UPDATE_SKIPPED_VERSION_CODE = "update_skipped_version_code"
         const val KEY_UPDATE_CACHED_METADATA_JSON = "update_cached_metadata_json"
         const val KEY_UPDATE_CACHED_METADATA_TS_MS = "update_cached_metadata_ts_ms"
+        const val KEY_UPDATE_AUTO_CHECK_ENABLED = "update_auto_check_enabled"
 
         const val PROXY_MODE_STOPPED = "stopped"
         const val PROXY_MODE_PASSTHROUGH = "passthrough"
@@ -291,6 +292,12 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
 
     override fun setCachedUpdateMetadataTsMs(tsMs: Long) =
         prefs.edit().putLong(KEY_UPDATE_CACHED_METADATA_TS_MS, tsMs).apply()
+
+    fun isAutoUpdateCheckEnabled(): Boolean =
+        prefs.getBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, true)
+
+    fun setAutoUpdateCheckEnabled(enabled: Boolean) =
+        prefs.edit().putBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, enabled).apply()
 
     // ========== Runtime State ==========
 

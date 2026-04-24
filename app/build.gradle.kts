@@ -20,12 +20,12 @@ android {
         applicationId = "com.map"
         minSdk = 21
         targetSdk = 34
-        versionCode = 17
-        versionName = "0.2.0"
+        versionCode = 18
+        versionName = "0.2.1"
         buildConfigField(
             "String",
             "UPDATE_METADATA_URL",
-            "\"https://raw.githubusercontent.com/kalkalch/map/main/update.json\""
+            "\"https://github.com/kalkalch/map/releases/latest/download/update.json\""
         )
         buildConfigField(
             "String",

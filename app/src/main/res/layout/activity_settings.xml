@@ -196,6 +196,14 @@
                         android:inputType="number"
                         android:text="30" />
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switch_auto_update_check"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:checked="true"
+                    android:text="@string/settings_auto_update_check" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
         

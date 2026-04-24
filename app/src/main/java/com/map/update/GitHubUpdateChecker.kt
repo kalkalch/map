@@ -1,6 +1,7 @@
 package com.map.update
 
 import android.os.Build
+import android.util.Base64
 import android.util.Log
 import com.map.BuildConfig
 import com.google.gson.JsonObject
@@ -15,7 +16,6 @@ import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
-import java.util.Base64
 import java.util.Locale
 
 class GitHubUpdateChecker(
@@ -42,16 +42,28 @@ class GitHubUpdateChecker(
         val cacheAgeMs = now - settings.getCachedUpdateMetadataTsMs()
         val cachedJson = settings.getCachedUpdateMetadataJson()
         if (cachedJson.isNotBlank() && cacheAgeMs in 0..CACHE_TTL_MS) {
-            return parseAndValidate(cachedJson)
+            val cachedResult = parseAndValidate(cachedJson)
+            if (cachedResult !is UpdateCheckResult.Failed || cachedResult.code != UpdateCheckErrorCode.INVALID_JSON) {
+                return cachedResult
+            }
         }
 
-        val json = fetchWithRetry() ?: return UpdateCheckResult.Failed(
-            UpdateCheckErrorCode.NETWORK,
-            "Не удалось загрузить update.json"
-        )
-        settings.setCachedUpdateMetadataJson(json)
-        settings.setCachedUpdateMetadataTsMs(now)
-        return parseAndValidate(json)
+        val json = fetchWithRetry()
+        if (json == null) {
+            if (cachedJson.isNotBlank()) {
+                return parseAndValidate(cachedJson)
+            }
+            return UpdateCheckResult.Failed(
+                UpdateCheckErrorCode.NETWORK,
+                "Не удалось загрузить update.json"
+            )
+        }
+        val result = parseAndValidate(json)
+        if (result !is UpdateCheckResult.Failed || result.code != UpdateCheckErrorCode.INVALID_JSON) {
+            settings.setCachedUpdateMetadataJson(json)
+            settings.setCachedUpdateMetadataTsMs(now)
+        }
+        return result
     }
 
     fun verifySha256(file: File, expectedSha256: String): Boolean {
@@ -186,17 +198,26 @@ class GitHubUpdateChecker(
 
     private fun verifyMetadataSignature(metadata: UpdateMetadata): Boolean {
         return try {
-            val publicKeyBytes = Base64.getDecoder().decode(signingPublicKeyDerBase64)
+            val publicKeyBytes = decodeBase64(signingPublicKeyDerBase64)
             val keySpec = X509EncodedKeySpec(publicKeyBytes)
             val publicKey = KeyFactory.getInstance("Ed25519").generatePublic(keySpec)
             val verifier = Signature.getInstance("Ed25519")
             verifier.initVerify(publicKey)
             verifier.update(buildSigningPayload(metadata).toByteArray(StandardCharsets.UTF_8))
-            val signatureBytes = Base64.getDecoder().decode(metadata.signature)
+            val signatureBytes = decodeBase64(metadata.signature)
             verifier.verify(signatureBytes)
         } catch (e: Exception) {
             logE("Metadata signature verification failed", e)
             false
+        }
+    }
+
+    private fun decodeBase64(value: String): ByteArray {
+        return try {
+            Base64.decode(value, Base64.DEFAULT)
+        } catch (_: Throwable) {
+            // Local JVM tests may not provide working android.util.Base64.
+            java.util.Base64.getDecoder().decode(value)
         }
     }
 
