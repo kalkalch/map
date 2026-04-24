@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -52,6 +53,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var editLocalProxyUser: EditText
     private lateinit var editLocalProxyPass: EditText
     private lateinit var editProxyHealthcheckHost: EditText
+    private lateinit var editProxyHealthcheckPort: EditText
     private lateinit var editProxyHealthcheckIntervalSec: EditText
     private lateinit var switchAutoUpdateCheck: SwitchMaterial
 
@@ -73,6 +75,20 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var radioGroupLanguage: RadioGroup
     private lateinit var radioRu: RadioButton
     private lateinit var radioEn: RadioButton
+
+    // Accordion views
+    private lateinit var headerLocal: LinearLayout
+    private lateinit var iconLocal: ImageView
+    private lateinit var contentLocal: LinearLayout
+    private lateinit var headerProxy: LinearLayout
+    private lateinit var iconProxy: ImageView
+    private lateinit var contentProxy: LinearLayout
+    private lateinit var headerVpn: LinearLayout
+    private lateinit var iconVpn: ImageView
+    private lateinit var contentVpn: LinearLayout
+    private lateinit var headerGeneral: LinearLayout
+    private lateinit var iconGeneral: ImageView
+    private lateinit var contentGeneral: LinearLayout
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,6 +138,7 @@ class SettingsActivity : AppCompatActivity() {
         editLocalProxyUser = findViewById(R.id.edit_local_proxy_user)
         editLocalProxyPass = findViewById(R.id.edit_local_proxy_pass)
         editProxyHealthcheckHost = findViewById(R.id.edit_proxy_healthcheck_host)
+        editProxyHealthcheckPort = findViewById(R.id.edit_proxy_healthcheck_port)
         editProxyHealthcheckIntervalSec = findViewById(R.id.edit_proxy_healthcheck_interval_sec)
         switchAutoUpdateCheck = findViewById(R.id.switch_auto_update_check)
 
@@ -142,9 +159,29 @@ class SettingsActivity : AppCompatActivity() {
         radioGroupLanguage = findViewById(R.id.radio_group_language)
         radioRu = findViewById(R.id.radio_ru)
         radioEn = findViewById(R.id.radio_en)
+
+        // Accordion views
+        headerLocal = findViewById(R.id.header_local)
+        iconLocal = findViewById(R.id.icon_local)
+        contentLocal = findViewById(R.id.content_local)
+        headerProxy = findViewById(R.id.header_proxy)
+        iconProxy = findViewById(R.id.icon_proxy)
+        contentProxy = findViewById(R.id.content_proxy)
+        headerVpn = findViewById(R.id.header_vpn)
+        iconVpn = findViewById(R.id.icon_vpn)
+        contentVpn = findViewById(R.id.content_vpn)
+        headerGeneral = findViewById(R.id.header_general)
+        iconGeneral = findViewById(R.id.icon_general)
+        contentGeneral = findViewById(R.id.content_general)
     }
     
     private fun setupListeners() {
+        // Accordion listeners
+        setupAccordion(headerLocal, iconLocal, contentLocal)
+        setupAccordion(headerProxy, iconProxy, contentProxy)
+        setupAccordion(headerVpn, iconVpn, contentVpn)
+        setupAccordion(headerGeneral, iconGeneral, contentGeneral)
+        
         switchSocks5Upstream.setOnCheckedChangeListener { _, isChecked ->
             layoutSocks5Upstream.visibility = if (isChecked) View.VISIBLE else View.GONE
         }
@@ -168,6 +205,16 @@ class SettingsActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             startActivity(Intent.createChooser(shareIntent, getString(R.string.sstp_log_share_title)))
+        }
+    }
+
+    private fun setupAccordion(header: LinearLayout, icon: ImageView, content: LinearLayout) {
+        header.setOnClickListener {
+            val isVisible = content.visibility == View.VISIBLE
+            content.visibility = if (isVisible) View.GONE else View.VISIBLE
+            icon.setImageResource(
+                if (isVisible) R.drawable.ic_expand_more else R.drawable.ic_expand_less
+            )
         }
     }
     
@@ -209,6 +256,7 @@ class SettingsActivity : AppCompatActivity() {
         editLocalProxyUser.setText(settings.getLocalProxyUser())
         editLocalProxyPass.setText(settings.getLocalProxyPass())
         editProxyHealthcheckHost.setText(settings.getProxyHealthcheckHost())
+        editProxyHealthcheckPort.setText(settings.getProxyHealthcheckPort().toString())
         editProxyHealthcheckIntervalSec.setText(settings.getProxyHealthcheckIntervalSec().toString())
         switchAutoUpdateCheck.isChecked = settings.isAutoUpdateCheckEnabled()
 
@@ -301,12 +349,34 @@ class SettingsActivity : AppCompatActivity() {
             settings.setLocalProxyPass(localProxyPass)
         }
 
-        val healthcheckHost = editProxyHealthcheckHost.text.toString().trim()
+        val healthcheckHostRaw = editProxyHealthcheckHost.text.toString().trim()
+        var healthcheckHost = healthcheckHostRaw
+        var hostPortFromHostField: Int? = null
+        // Backward compatibility: allow accidental "host:port" input in host field.
+        val singleColonIndex = healthcheckHostRaw.lastIndexOf(':')
+        if (singleColonIndex > 0 && healthcheckHostRaw.indexOf(':') == singleColonIndex) {
+            val portCandidate = healthcheckHostRaw.substring(singleColonIndex + 1)
+            val parsedPort = portCandidate.toIntOrNull()
+            if (parsedPort != null && settings.isValidPort(parsedPort)) {
+                healthcheckHost = healthcheckHostRaw.substring(0, singleColonIndex).trim()
+                hostPortFromHostField = parsedPort
+            }
+        }
+
         if (healthcheckHost.isBlank()) {
             showToast("Укажите адрес проверки через прокси")
             hasError = true
         } else {
             settings.setProxyHealthcheckHost(healthcheckHost)
+        }
+
+        val healthcheckPortInput = editProxyHealthcheckPort.text.toString().toIntOrNull()
+        val healthcheckPort = hostPortFromHostField ?: healthcheckPortInput
+        if (healthcheckPort == null || !settings.isValidPort(healthcheckPort)) {
+            showToast("Неверный порт проверки каскада (1–65535)")
+            hasError = true
+        } else {
+            settings.setProxyHealthcheckPort(healthcheckPort)
         }
 
         val healthcheckInterval = editProxyHealthcheckIntervalSec.text.toString().toIntOrNull()

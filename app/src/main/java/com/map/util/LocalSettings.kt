@@ -37,6 +37,7 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
         const val KEY_RUNTIME_SSTP_STATUS = "runtime_sstp_status"
         const val KEY_RUNTIME_REMOTE_PROXY_STATUS = "runtime_remote_proxy_status"
         const val KEY_PROXY_HEALTHCHECK_HOST = "proxy_healthcheck_host"
+        const val KEY_PROXY_HEALTHCHECK_PORT = "proxy_healthcheck_port"
         const val KEY_PROXY_HEALTHCHECK_INTERVAL_SEC = "proxy_healthcheck_interval_sec"
         const val KEY_UPDATE_SKIPPED_VERSION_CODE = "update_skipped_version_code"
         const val KEY_UPDATE_CACHED_METADATA_JSON = "update_cached_metadata_json"
@@ -94,6 +95,7 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
         const val MIN_SSTP_TUN_MTU = 1280
         const val MAX_SSTP_TUN_MTU = 1500
         const val DEFAULT_PROXY_HEALTHCHECK_HOST = "1.1.1.1"
+        const val DEFAULT_PROXY_HEALTHCHECK_PORT = 443
         const val DEFAULT_PROXY_HEALTHCHECK_INTERVAL_SEC = 30
         const val MIN_PORT = 1
         const val MAX_PORT = 65535
@@ -218,7 +220,7 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
     
     // ========== HTTP/HTTPS Settings ==========
     
-    fun isHttpEnabled(): Boolean = prefs.getBoolean(KEY_HTTP_ENABLED, true)
+    fun isHttpEnabled(): Boolean = prefs.getBoolean(KEY_HTTP_ENABLED, false)
     fun setHttpEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_HTTP_ENABLED, enabled).apply()
     
     fun getHttpPort(): Int {
@@ -267,6 +269,17 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
 
     fun setProxyHealthcheckHost(host: String) =
         prefs.edit().putString(KEY_PROXY_HEALTHCHECK_HOST, host.trim()).apply()
+
+    fun getProxyHealthcheckPort(): Int {
+        val port = prefs.getInt(KEY_PROXY_HEALTHCHECK_PORT, DEFAULT_PROXY_HEALTHCHECK_PORT)
+        return if (isValidPort(port)) port else DEFAULT_PROXY_HEALTHCHECK_PORT
+    }
+
+    fun setProxyHealthcheckPort(port: Int): Boolean {
+        if (!isValidPort(port)) return false
+        prefs.edit().putInt(KEY_PROXY_HEALTHCHECK_PORT, port).apply()
+        return true
+    }
 
     fun getProxyHealthcheckIntervalSec(): Int {
         val value = prefs.getInt(KEY_PROXY_HEALTHCHECK_INTERVAL_SEC, DEFAULT_PROXY_HEALTHCHECK_INTERVAL_SEC)

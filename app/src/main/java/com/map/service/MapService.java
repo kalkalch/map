@@ -40,7 +40,6 @@ public class MapService extends Service {
     private static final int UPSTREAM_CHECK_ATTEMPTS = 3;
     private static final int UPSTREAM_CHECK_RETRY_DELAY_MS = 1200;
     private static final int LOCAL_SOCKS5_CHECK_TIMEOUT_MS = 3000;
-    private static final int CASCADE_PROBE_PORT = 443;
 
     private ProxyServer socks5Server;
     private ProxyServer httpServer;
@@ -739,29 +738,44 @@ public class MapService extends Service {
 
     private boolean checkCascadeThroughLocalProxies() {
         String probeHost = settings.getProxyHealthcheckHost();
+        int probePort = settings.getProxyHealthcheckPort();
+        // Backward compatibility for previously saved values like "host:443".
+        int singleColonIndex = probeHost.lastIndexOf(':');
+        if (singleColonIndex > 0 && probeHost.indexOf(':') == singleColonIndex) {
+            String portCandidate = probeHost.substring(singleColonIndex + 1);
+            try {
+                int parsedPort = Integer.parseInt(portCandidate);
+                if (parsedPort >= 1 && parsedPort <= 65535) {
+                    probeHost = probeHost.substring(0, singleColonIndex).trim();
+                    probePort = parsedPort;
+                }
+            } catch (NumberFormatException ignored) {
+                // Keep configured host/port as-is when suffix is not a valid port.
+            }
+        }
         boolean checkedAny = false;
         boolean success = false;
 
         if (settings.isSocks5Enabled() && socks5Server != null) {
             checkedAny = true;
-            CascadeCheckResult socksResult = checkCascadeViaLocalSocks5(probeHost, CASCADE_PROBE_PORT);
+            CascadeCheckResult socksResult = checkCascadeViaLocalSocks5(probeHost, probePort);
             success = success || socksResult.ok;
             SstpConnectionLog.log(
                 "MapService",
                 "Cascade SOCKS5 check " + (socksResult.ok ? "OK" : "FAILED")
-                    + " via local proxy to " + probeHost + ":" + CASCADE_PROBE_PORT
+                    + " via local proxy to " + probeHost + ":" + probePort
                     + " detail=" + socksResult.detail
             );
         }
 
         if (settings.isHttpEnabled() && httpServer != null) {
             checkedAny = true;
-            CascadeCheckResult httpResult = checkCascadeViaLocalHttp(probeHost, CASCADE_PROBE_PORT);
+            CascadeCheckResult httpResult = checkCascadeViaLocalHttp(probeHost, probePort);
             success = success || httpResult.ok;
             SstpConnectionLog.log(
                 "MapService",
                 "Cascade HTTP check " + (httpResult.ok ? "OK" : "FAILED")
-                    + " via local proxy to " + probeHost + ":" + CASCADE_PROBE_PORT
+                    + " via local proxy to " + probeHost + ":" + probePort
                     + " detail=" + httpResult.detail
             );
         }
