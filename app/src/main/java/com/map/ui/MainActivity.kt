@@ -21,6 +21,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
 import com.map.BuildConfig
@@ -43,6 +44,9 @@ class MainActivity : AppCompatActivity() {
     private var isProxyRunning = false
     private var pendingUpdate: UpdateMetadata? = null
     private var pendingDownloadId: Long = -1L
+    @Volatile
+    private var isUpdateCheckInProgress = false
+    private var downloadReceiverRegistered = false
     private val runtimeStateListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == LocalSettings.KEY_RUNTIME_PROXY_RUNNING
             || key == LocalSettings.KEY_RUNTIME_PROXY_MODE
@@ -78,9 +82,12 @@ class MainActivity : AppCompatActivity() {
         initViews()
         updateStatusUI()
         requestNotificationPermissionIfNeeded()
-        registerReceiver(downloadReceiver, android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
-        if (intent?.getBooleanExtra(EXTRA_ACTION_CHECK_UPDATES, false) == true) {
-            checkForUpdates()
+        registerDownloadReceiver()
+        val isManualUpdateCheck = intent?.getBooleanExtra(EXTRA_ACTION_CHECK_UPDATES, false) == true
+        if (isManualUpdateCheck) {
+            checkForUpdates(showUserFeedback = true)
+        } else if (settings.isAutoUpdateCheckEnabled()) {
+            checkForUpdates(showUserFeedback = false)
         }
     }
     
@@ -125,8 +132,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(downloadReceiver)
+        if (downloadReceiverRegistered) {
+            unregisterReceiver(downloadReceiver)
+            downloadReceiverRegistered = false
+        }
         super.onDestroy()
+    }
+
+    private fun registerDownloadReceiver() {
+        val filter = android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(downloadReceiver, filter)
+        }
+        downloadReceiverRegistered = true
     }
     
     private fun initViews() {
@@ -140,10 +160,6 @@ class MainActivity : AppCompatActivity() {
         
         binding.btnAbout.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
-        }
-
-        binding.btnCheckUpdates.setOnClickListener {
-            checkForUpdates()
         }
     }
     
@@ -250,14 +266,38 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
-    private fun checkForUpdates() {
-        showToast(getString(R.string.update_checking))
+    private fun checkForUpdates(showUserFeedback: Boolean) {
+        if (isUpdateCheckInProgress) {
+            return
+        }
+        isUpdateCheckInProgress = true
+        if (showUserFeedback) {
+            showToast(getString(R.string.update_checking))
+        }
         Thread {
-            val result = updateChecker.check()
+            val result = runCatching { updateChecker.check() }
+                .getOrElse {
+                    UpdateCheckResult.Failed(
+                        UpdateCheckErrorCode.NETWORK,
+                        it.localizedMessage ?: "Unexpected error"
+                    )
+                }
             runOnUiThread {
+                isUpdateCheckInProgress = false
+                if (isFinishing || isDestroyed) {
+                    return@runOnUiThread
+                }
                 when (result) {
-                    is UpdateCheckResult.UpToDate -> showToast(getString(R.string.update_not_available))
-                    is UpdateCheckResult.Failed -> showToast(resolveUpdateError(result))
+                    is UpdateCheckResult.UpToDate -> {
+                        if (showUserFeedback) {
+                            showToast(getString(R.string.update_not_available))
+                        }
+                    }
+                    is UpdateCheckResult.Failed -> {
+                        if (showUserFeedback) {
+                            showToast(resolveUpdateError(result))
+                        }
+                    }
                     is UpdateCheckResult.UpdateAvailable -> showUpdateDialog(result.metadata)
                 }
             }
@@ -266,6 +306,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resolveUpdateError(result: UpdateCheckResult.Failed): String {
         return when (result.code) {
+            UpdateCheckErrorCode.NETWORK -> getString(R.string.update_check_failed_network)
             UpdateCheckErrorCode.DEVICE_NOT_SUPPORTED -> getString(R.string.update_device_not_supported)
             UpdateCheckErrorCode.APP_VERSION_TOO_OLD -> getString(R.string.update_app_too_old)
             UpdateCheckErrorCode.INVALID_SIGNATURE -> getString(R.string.update_invalid_signature)

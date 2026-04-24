@@ -14,7 +14,7 @@ class AboutActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAboutBinding
     
     companion object {
-        private const val WEBSITE_URL = "https://mooqle.com"
+        private const val WEBSITE_URL = "https://github.com/kalkalch/map"
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {

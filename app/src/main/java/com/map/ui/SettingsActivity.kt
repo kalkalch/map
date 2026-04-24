@@ -53,6 +53,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var editLocalProxyPass: EditText
     private lateinit var editProxyHealthcheckHost: EditText
     private lateinit var editProxyHealthcheckIntervalSec: EditText
+    private lateinit var switchAutoUpdateCheck: SwitchMaterial
 
     // SSTP views
     private lateinit var switchSstpEnabled: SwitchMaterial
@@ -122,6 +123,7 @@ class SettingsActivity : AppCompatActivity() {
         editLocalProxyPass = findViewById(R.id.edit_local_proxy_pass)
         editProxyHealthcheckHost = findViewById(R.id.edit_proxy_healthcheck_host)
         editProxyHealthcheckIntervalSec = findViewById(R.id.edit_proxy_healthcheck_interval_sec)
+        switchAutoUpdateCheck = findViewById(R.id.switch_auto_update_check)
 
         switchSstpEnabled = findViewById(R.id.switch_sstp_enabled)
         editSstpHost = findViewById(R.id.edit_sstp_host)
@@ -208,6 +210,7 @@ class SettingsActivity : AppCompatActivity() {
         editLocalProxyPass.setText(settings.getLocalProxyPass())
         editProxyHealthcheckHost.setText(settings.getProxyHealthcheckHost())
         editProxyHealthcheckIntervalSec.setText(settings.getProxyHealthcheckIntervalSec().toString())
+        switchAutoUpdateCheck.isChecked = settings.isAutoUpdateCheckEnabled()
 
         switchSstpEnabled.isChecked = settings.isSstpEnabled()
         editSstpHost.setText(settings.getSstpHost())
@@ -313,6 +316,7 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             settings.setProxyHealthcheckIntervalSec(healthcheckInterval)
         }
+        settings.setAutoUpdateCheckEnabled(switchAutoUpdateCheck.isChecked)
 
         settings.setSstpEnabled(switchSstpEnabled.isChecked)
         val sstpHost = editSstpHost.text.toString()

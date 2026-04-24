@@ -17,6 +17,7 @@
     <string name="settings_port">Порт прокси</string>
     <string name="settings_protocol">Протокол</string>
     <string name="settings_language">Язык интерфейса</string>
+    <string name="settings_auto_update_check">Автоматически проверять обновления при запуске</string>
     
     <!-- Buttons -->
     <string name="btn_start">Запустить</string>
@@ -45,6 +46,7 @@
     <string name="update_verify_failed">Проверка файла не пройдена (SHA-256)</string>
     <string name="update_install_permission_required">Разрешите установку из неизвестных источников для MAP</string>
     <string name="update_check_failed">Не удалось проверить обновления: %1$s</string>
+    <string name="update_check_failed_network">Не удалось проверить обновления: проблема с сетью или сервером</string>
     <string name="update_invalid_signature">Подпись данных обновления не прошла проверку</string>
     <string name="update_device_not_supported">Это обновление не поддерживается на вашем устройстве</string>
     <string name="update_app_too_old">Сначала обновитесь до промежуточной версии приложения</string>
