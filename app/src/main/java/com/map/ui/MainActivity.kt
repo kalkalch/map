@@ -21,7 +21,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+import androidx.core.content.ContextCompat.RECEIVER_EXPORTED
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
 import com.map.BuildConfig
@@ -142,7 +142,9 @@ class MainActivity : AppCompatActivity() {
     private fun registerDownloadReceiver() {
         val filter = android.content.IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(downloadReceiver, filter, RECEIVER_NOT_EXPORTED)
+            // ACTION_DOWNLOAD_COMPLETE is dispatched by a system component.
+            // Use RECEIVER_EXPORTED to ensure delivery on modern Android versions.
+            registerReceiver(downloadReceiver, filter, RECEIVER_EXPORTED)
         } else {
             registerReceiver(downloadReceiver, filter)
         }

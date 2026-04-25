@@ -684,7 +684,7 @@
                         android:id="@+id/switch_auto_update_check"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:checked="true"
+                        android:checked="false"
                         android:text="@string/settings_auto_update_check" />
                     
                     <TextView

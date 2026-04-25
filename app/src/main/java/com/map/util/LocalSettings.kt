@@ -307,7 +307,7 @@ class LocalSettings(context: Context) : UpdateSettingsStore {
         prefs.edit().putLong(KEY_UPDATE_CACHED_METADATA_TS_MS, tsMs).apply()
 
     fun isAutoUpdateCheckEnabled(): Boolean =
-        prefs.getBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, true)
+        prefs.getBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, false)
 
     fun setAutoUpdateCheckEnabled(enabled: Boolean) =
         prefs.edit().putBoolean(KEY_UPDATE_AUTO_CHECK_ENABLED, enabled).apply()
