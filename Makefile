@@ -7,6 +7,7 @@ CACHE_DIR := ./cache
 BUILD_DIR := $(CACHE_DIR)/build
 GRADLE_CACHE := $(CACHE_DIR)/gradle
 PROJECT_CACHE_DIR := /tmp/gradle-project-cache
+SIGN ?= 0
 
 # Printed at the end of successful build/test targets (host local time)
 BUILD_FINISHED = @echo "🕐 Сборка завершена: $$(date '+%Y-%m-%d %H:%M:%S %z')"
@@ -81,22 +82,32 @@ build-debug: ensure-image
 build-release: ensure-image
 	@echo "🔨 Building RELEASE APK..."
 	@mkdir -p $(BUILD_DIR) $(GRADLE_CACHE)
-	@docker run --rm --platform linux/amd64 \
-		-v $(PROJECT_DIR):/src \
-		-v $(PROJECT_DIR)/$(GRADLE_CACHE):/root/.gradle \
-		-w /src \
-		$(IMAGE_NAME) \
-		--project-cache-dir $(PROJECT_CACHE_DIR) \
-		assembleRelease
-	@if [ -f app/build/outputs/apk/release/app-release.apk ]; then \
-		cp app/build/outputs/apk/release/app-release.apk $(BUILD_DIR)/; \
-		echo "✅ APK saved: $(BUILD_DIR)/app-release.apk"; \
-	elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then \
-		cp app/build/outputs/apk/release/app-release-unsigned.apk $(BUILD_DIR)/app-release.apk; \
-		echo "✅ APK saved: $(BUILD_DIR)/app-release.apk (from unsigned build)"; \
+	@if [ "$(SIGN)" = "1" ]; then \
+		echo "🔐 Signing mode enabled (SIGN=1)"; \
+		if [ ! -x "$(PROJECT_DIR)/keys/build-and-sign.sh" ]; then \
+			echo "❌ Missing executable script: $(PROJECT_DIR)/keys/build-and-sign.sh"; \
+			echo "   Create local gitignored script to build signed release."; \
+			exit 1; \
+		fi; \
+		"$(PROJECT_DIR)/keys/build-and-sign.sh"; \
 	else \
-		echo "❌ Release APK not found in app/build/outputs/apk/release"; \
-		exit 1; \
+		docker run --rm --platform linux/amd64 \
+			-v $(PROJECT_DIR):/src \
+			-v $(PROJECT_DIR)/$(GRADLE_CACHE):/root/.gradle \
+			-w /src \
+			$(IMAGE_NAME) \
+			--project-cache-dir $(PROJECT_CACHE_DIR) \
+			assembleRelease; \
+		if [ -f app/build/outputs/apk/release/app-release.apk ]; then \
+			cp app/build/outputs/apk/release/app-release.apk $(BUILD_DIR)/; \
+			echo "✅ APK saved: $(BUILD_DIR)/app-release.apk"; \
+		elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then \
+			cp app/build/outputs/apk/release/app-release-unsigned.apk $(BUILD_DIR)/app-release.apk; \
+			echo "✅ APK saved: $(BUILD_DIR)/app-release.apk (from unsigned build)"; \
+		else \
+			echo "❌ Release APK not found in app/build/outputs/apk/release"; \
+			exit 1; \
+		fi; \
 	fi
 	$(BUILD_FINISHED_OR_EMPTY)
 
