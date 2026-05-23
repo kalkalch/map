@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settings: LocalSettings
     private lateinit var updateChecker: GitHubUpdateChecker
     private var isProxyRunning = false
+    private var isUpdatingSwitches = false
     private var pendingUpdate: UpdateMetadata? = null
     private var pendingDownloadId: Long = -1L
     @Volatile
@@ -49,7 +50,6 @@ class MainActivity : AppCompatActivity() {
     private var downloadReceiverRegistered = false
     private val runtimeStateListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == LocalSettings.KEY_RUNTIME_PROXY_RUNNING
-            || key == LocalSettings.KEY_RUNTIME_PROXY_MODE
             || key == LocalSettings.KEY_RUNTIME_SSTP_STATUS
             || key == LocalSettings.KEY_RUNTIME_REMOTE_PROXY_STATUS
         ) {
@@ -152,8 +152,22 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun initViews() {
-        binding.btnStartStop.setOnClickListener {
-            toggleProxy()
+        binding.switchProxy.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingSwitches) return@setOnCheckedChangeListener
+            if (isChecked) {
+                startLocalProxy()
+            } else {
+                stopLocalProxy()
+            }
+        }
+
+        binding.switchVpn.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingSwitches) return@setOnCheckedChangeListener
+            if (isChecked) {
+                startSstpClient()
+            } else {
+                stopSstpClient()
+            }
         }
         
         binding.btnSettings.setOnClickListener {
@@ -165,42 +179,75 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun toggleProxy() {
-        if (isProxyRunning) {
-            stopProxy()
-        } else {
-            startProxy()
-        }
-    }
-    
-    private fun startProxy() {
+    private fun startLocalProxy() {
         try {
             if (!settings.isSocks5Enabled() && !settings.isHttpEnabled()) {
                 showToast("Включите хотя бы один тип прокси в настройках")
+                updateStatusUI()
                 return
             }
 
-            if (settings.isSstpEnabled()) {
-                val prepareIntent = VpnService.prepare(this)
-                if (prepareIntent != null) {
-                    startActivityForResult(prepareIntent, REQUEST_VPN_PERMISSION)
-                    return
-                }
-                startVpnAndProxy()
-                return
+            val intent = Intent(this, MapService::class.java).apply {
+                putExtra(MapService.EXTRA_ACTION, MapService.ACTION_START_PROXY)
             }
+            startForegroundService(intent)
 
-            startMapProxyService()
+            settings.setProxyRunning(true)
+            isProxyRunning = true
+            updateStatusUI()
+            showToast(getString(R.string.success_started))
             
         } catch (e: Exception) {
             showToast(getString(R.string.error_start_failed) + ": ${e.message}")
+            updateStatusUI()
         }
     }
     
-    private fun stopProxy() {
+    private fun stopLocalProxy() {
         try {
             val intent = Intent(this, MapService::class.java).apply {
-                putExtra("action", "stop")
+                putExtra(MapService.EXTRA_ACTION, MapService.ACTION_STOP_PROXY)
+            }
+            startService(intent)
+            
+            settings.setProxyRunning(false)
+            settings.setRuntimeProxyMode(LocalSettings.PROXY_MODE_STOPPED)
+            settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_INACTIVE)
+            isProxyRunning = false
+            updateStatusUI()
+            showToast(getString(R.string.success_proxy_stopped))
+            
+        } catch (e: Exception) {
+            showToast("Ошибка остановки прокси: ${e.message}")
+        }
+    }
+
+    private fun startSstpClient() {
+        try {
+            if (settings.getSstpHost().isBlank()) {
+                showToast("Укажите адрес VPN сервера в настройках")
+                updateStatusUI()
+                return
+            }
+
+            settings.setSstpEnabled(true)
+            val prepareIntent = VpnService.prepare(this)
+            if (prepareIntent != null) {
+                startActivityForResult(prepareIntent, REQUEST_VPN_PERMISSION)
+                return
+            }
+            startVpnClientService()
+
+        } catch (e: Exception) {
+            showToast("Ошибка запуска VPN: ${e.message}")
+            updateStatusUI()
+        }
+    }
+
+    private fun stopSstpClient() {
+        try {
+            val intent = Intent(this, MapService::class.java).apply {
+                putExtra(MapService.EXTRA_ACTION, MapService.ACTION_STOP_SSTP)
             }
             startService(intent)
 
@@ -208,14 +255,14 @@ class MainActivity : AppCompatActivity() {
                 putExtra(MapVpnService.EXTRA_ACTION, MapVpnService.ACTION_STOP)
             }
             startService(vpnIntent)
-            
-            settings.resetRuntimeState()
-            isProxyRunning = false
+
+            settings.setSstpEnabled(false)
+            settings.setRuntimeSstpStatus(getInactiveSstpStatus())
             updateStatusUI()
-            showToast(getString(R.string.success_stopped))
-            
+            showToast(getString(R.string.success_sstp_stopped))
+
         } catch (e: Exception) {
-            showToast("Ошибка остановки: ${e.message}")
+            showToast("Ошибка остановки VPN: ${e.message}")
         }
     }
     
@@ -223,16 +270,20 @@ class MainActivity : AppCompatActivity() {
         isProxyRunning = settings.isProxyRunning()
         val socks5Port = settings.getSocks5Port()
         val httpPort = settings.getHttpPort()
+        val sstpStatus = settings.getRuntimeSstpStatus()
+        val isSstpActive = isSstpRuntimeActive(sstpStatus)
         
-        if (isProxyRunning) {
+        if (isProxyRunning || isSstpActive) {
             binding.labelStatus.text = getString(R.string.status_connected)
             binding.labelStatus.setTextColor(getStatusColor(LocalSettings.STATUS_CONNECTED))
-            binding.btnStartStop.text = getString(R.string.btn_stop)
         } else {
             binding.labelStatus.text = getString(R.string.status_inactive)
             binding.labelStatus.setTextColor(getStatusColor(LocalSettings.STATUS_INACTIVE))
-            binding.btnStartStop.text = getString(R.string.btn_start)
         }
+        isUpdatingSwitches = true
+        binding.switchProxy.isChecked = isProxyRunning
+        binding.switchVpn.isChecked = isSstpActive
+        isUpdatingSwitches = false
         
         val addressInfo = buildString {
             if (settings.isSocks5Enabled()) {
@@ -255,13 +306,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.labelIpAddress.text = addressInfo.ifEmpty { "Прокси не настроен" }
-        binding.labelProxyMode.text = "Режим локального прокси: ${formatProxyMode(settings.getRuntimeProxyMode())}"
-        binding.labelProxyMode.setTextColor(getProxyModeColor(settings.getRuntimeProxyMode()))
         binding.labelRemoteProxyStatus.text =
             "Удаленный прокси: ${formatStatus(settings.getRuntimeRemoteProxyStatus())}"
         binding.labelRemoteProxyStatus.setTextColor(getStatusColor(settings.getRuntimeRemoteProxyStatus()))
-        binding.labelSstpStatus.text = "SSTP: ${formatStatus(settings.getRuntimeSstpStatus())}"
-        binding.labelSstpStatus.setTextColor(getStatusColor(settings.getRuntimeSstpStatus()))
+        binding.labelSstpStatus.text = "SSTP: ${formatStatus(sstpStatus)}"
+        binding.labelSstpStatus.setTextColor(getStatusColor(sstpStatus))
+    }
+
+    private fun isSstpRuntimeActive(status: String): Boolean {
+        return status == LocalSettings.STATUS_CONNECTED
+            || status == LocalSettings.STATUS_CONNECTING
+            || status == LocalSettings.STATUS_RECONNECTING
+            || status == LocalSettings.STATUS_WAITING
+    }
+
+    private fun getInactiveSstpStatus(): String {
+        return if (settings.isSstpEnabled()) {
+            LocalSettings.STATUS_INACTIVE
+        } else {
+            LocalSettings.STATUS_DISABLED
+        }
     }
     
     private fun showToast(message: String) {
@@ -416,38 +480,29 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_VPN_PERMISSION) {
             if (resultCode == RESULT_OK) {
-                startVpnAndProxy()
+                startVpnClientService()
             } else {
+                settings.setSstpEnabled(false)
+                settings.setRuntimeSstpStatus(LocalSettings.STATUS_DISABLED)
                 showToast("Для SSTP нужно разрешение на VPN")
+                updateStatusUI()
             }
         }
     }
 
-    private fun startVpnAndProxy() {
+    private fun startVpnClientService() {
         val vpnIntent = Intent(this, MapVpnService::class.java).apply {
             putExtra(MapVpnService.EXTRA_ACTION, MapVpnService.ACTION_PREPARE_ROUTE)
         }
         startService(vpnIntent)
-        startMapProxyService()
-    }
-
-    private fun startMapProxyService() {
         val intent = Intent(this, MapService::class.java).apply {
-            putExtra("action", "start")
+            putExtra(MapService.EXTRA_ACTION, MapService.ACTION_START_SSTP)
         }
         startForegroundService(intent)
 
-        settings.setProxyRunning(true)
-        isProxyRunning = true
+        settings.setRuntimeSstpStatus(LocalSettings.STATUS_CONNECTING)
         updateStatusUI()
-        showToast(getString(R.string.success_started))
-    }
-
-    private fun formatProxyMode(mode: String): String {
-        return when (mode) {
-            LocalSettings.PROXY_MODE_CASCADE -> "каскадирование"
-            else -> "остановлен"
-        }
+        showToast(getString(R.string.success_sstp_started))
     }
 
     private fun formatStatus(status: String): String {
@@ -463,14 +518,6 @@ class MainActivity : AppCompatActivity() {
             LocalSettings.STATUS_UNSUPPORTED -> "не поддерживается"
             else -> status
         }
-    }
-
-    private fun getProxyModeColor(mode: String): Int {
-        val colorRes = when (mode) {
-            LocalSettings.PROXY_MODE_CASCADE -> R.color.status_active
-            else -> R.color.status_inactive
-        }
-        return ContextCompat.getColor(this, colorRes)
     }
 
     private fun getStatusColor(status: String): Int {

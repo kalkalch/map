@@ -33,6 +33,14 @@ import java.util.List;
  * Required for Android 8.0+ compatibility.
  */
 public class MapService extends Service {
+    public static final String EXTRA_ACTION = "action";
+    public static final String ACTION_START = "start";
+    public static final String ACTION_STOP_ALL = "stop";
+    public static final String ACTION_STOP_PROXY = "stop_proxy";
+    public static final String ACTION_STOP_SSTP = "stop_sstp";
+    public static final String ACTION_START_PROXY = "start_proxy";
+    public static final String ACTION_START_SSTP = "start_sstp";
+
     private static final String CHANNEL_ID = "MAP_PROXY_CHANNEL";
     private static final String CHANNEL_NAME = "MAP Proxy Service";
     private static final int NOTIFICATION_ID = 1;
@@ -48,6 +56,8 @@ public class MapService extends Service {
     private Thread startupThread;
     private Thread cascadeHealthThread;
     private volatile boolean stopCascadeHealthChecks;
+    private volatile boolean localProxyStopRequested;
+    private volatile boolean sstpStopRequested;
     
     private static final class CascadeCheckResult {
         private final boolean ok;
@@ -82,10 +92,20 @@ public class MapService extends Service {
         startForeground(NOTIFICATION_ID, buildInitialNotification());
         
         if (intent != null) {
-            String action = intent.getStringExtra("action");
-            if ("start".equals(action)) {
+            String action = intent.getStringExtra(EXTRA_ACTION);
+            if (ACTION_START.equals(action)) {
                 startProxiesAsync();
-            } else if ("stop".equals(action)) {
+            } else if (ACTION_START_PROXY.equals(action)) {
+                startLocalProxiesAsync();
+            } else if (ACTION_START_SSTP.equals(action)) {
+                startSstpAsync();
+            } else if (ACTION_STOP_PROXY.equals(action)) {
+                stopLocalProxyOnly();
+                stopSelfIfIdle();
+            } else if (ACTION_STOP_SSTP.equals(action)) {
+                stopSstpOnly();
+                stopSelfIfIdle();
+            } else if (ACTION_STOP_ALL.equals(action)) {
                 cancelStartupIfRunning();
                 stopProxies();
                 stopSelf();
@@ -128,6 +148,18 @@ public class MapService extends Service {
         startupThread.start();
     }
 
+    private void startLocalProxiesAsync() {
+        cancelStartupIfRunning();
+        startupThread = new Thread(this::startLocalProxies, "MAP-Local-Proxy-Startup");
+        startupThread.start();
+    }
+
+    private void startSstpAsync() {
+        cancelStartupIfRunning();
+        startupThread = new Thread(this::startSstp, "MAP-SSTP-Startup");
+        startupThread.start();
+    }
+
     private void cancelStartupIfRunning() {
         if (startupThread != null && startupThread.isAlive()) {
             if (Thread.currentThread() != startupThread) {
@@ -142,6 +174,8 @@ public class MapService extends Service {
     private void startProxies() {
         stopCascadeHealthChecks();
         stopProxyServersOnly();
+        localProxyStopRequested = false;
+        sstpStopRequested = false;
         settings.setProxyRunning(true);
         settings.setRuntimeProxyMode(LocalSettings.PROXY_MODE_CASCADE);
         settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_WAITING);
@@ -150,62 +184,7 @@ public class MapService extends Service {
         );
         
         try {
-            List<ProxyNode> socks5Chain = null;
-            if (settings.isSocks5Enabled()) {
-                socks5Chain = buildSocks5Chain();
-                if (socks5Chain == null || socks5Chain.isEmpty()) {
-                    throw new IOException("SOCKS5 upstream не настроен: passthrough отключен");
-                }
-            }
-
-            List<ProxyNode> httpChain = null;
-            if (settings.isHttpEnabled()) {
-                httpChain = buildHttpChain();
-                if (httpChain == null || httpChain.isEmpty()) {
-                    throw new IOException("HTTP upstream не настроен: passthrough отключен");
-                }
-            }
-
-            if (settings.isSocks5Enabled()) {
-                socks5Server = new ProxyServer(this);
-                socks5Server.start(
-                    settings.getSocks5BindAddress(),
-                    settings.getSocks5Port(), 
-                    Protocol.SOCKS5, 
-                    socks5Chain,
-                    getLocalProxyCredentials()
-                );
-                SstpConnectionLog.log(
-                    "MapService",
-                    "Local SOCKS5 proxy started on " + settings.getSocks5BindAddress() + ":" + settings.getSocks5Port()
-                );
-                try {
-                    verifyLocalSocks5(
-                        settings.getSocks5BindAddress(),
-                        settings.getSocks5Port()
-                    );
-                } catch (IOException e) {
-                    // Local proxy is already bound; don't fail startup on best-effort diagnostic probe.
-                    Timber.tag("MapService").w(e, "SOCKS5 local health check failed, continuing startup");
-                    SstpConnectionLog.logError("MapService", "SOCKS5 local health check failed", e);
-                }
-            }
-            
-            // Start HTTP/HTTPS proxy
-            if (settings.isHttpEnabled()) {
-                httpServer = new ProxyServer(this);
-                httpServer.start(
-                    settings.getHttpBindAddress(),
-                    settings.getHttpPort(), 
-                    Protocol.HTTP, 
-                    httpChain,
-                    getLocalProxyCredentials()
-                );
-                SstpConnectionLog.log(
-                    "MapService",
-                    "Local HTTP proxy started on " + settings.getHttpBindAddress() + ":" + settings.getHttpPort()
-                );
-            }
+            startLocalProxyServers();
 
             if (settings.isSstpConnectionLoggingEnabled()) {
                 SstpConnectionLog.startSession(settings);
@@ -217,13 +196,14 @@ public class MapService extends Service {
                 settings,
                 MapVpnService.Companion.getActiveInstance(),
                 (status, detail) -> {
-                    settings.setRuntimeSstpStatus(status);
+                    if (!sstpStopRequested) {
+                        settings.setRuntimeSstpStatus(status);
+                    }
                     Timber.tag("MapService").i("SSTP status: %s (%s)", status, detail);
                     SstpConnectionLog.log("MapService", "SSTP status=" + status + " detail=" + detail);
                     updateNotification();
                 }
             );
-            settings.setRuntimeSstpStatus(sstpResult.getStatus());
             SstpConnectionLog.log(
                 "MapService",
                 "SSTP connect result status=" + sstpResult.getStatus() + " tunnelReady=" + sstpResult.isTunnelReady()
@@ -237,9 +217,23 @@ public class MapService extends Service {
                 }
             }
 
-            boolean initialCascadeCheck = checkCascadeThroughLocalProxies();
-            updateRuntimeStatusAfterStart(sstpResult, initialCascadeCheck);
-            startCascadeHealthChecks();
+            if (sstpStopRequested) {
+                settings.setRuntimeSstpStatus(getInactiveSstpStatus());
+                SstpConnectionLog.log("MapService", "SSTP stop was requested during startup");
+            } else {
+                settings.setRuntimeSstpStatus(sstpResult.getStatus());
+            }
+
+            if (!localProxyStopRequested && hasLocalProxyServersRunning()) {
+                boolean initialCascadeCheck = checkCascadeThroughLocalProxies();
+                updateRuntimeStatusAfterStart(sstpResult, initialCascadeCheck);
+                startCascadeHealthChecks();
+            } else {
+                settings.setProxyRunning(false);
+                settings.setRuntimeProxyMode(LocalSettings.PROXY_MODE_STOPPED);
+                settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_INACTIVE);
+                SstpConnectionLog.log("MapService", "Local proxy startup ended with proxy stopped");
+            }
             
             // Update notification with actual status
             updateNotification();
@@ -257,6 +251,162 @@ public class MapService extends Service {
             if (Thread.currentThread() == startupThread) {
                 startupThread = null;
             }
+        }
+    }
+
+    private void startLocalProxies() {
+        stopCascadeHealthChecks();
+        stopProxyServersOnly();
+        localProxyStopRequested = false;
+        settings.setProxyRunning(true);
+        settings.setRuntimeProxyMode(LocalSettings.PROXY_MODE_CASCADE);
+        settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_WAITING);
+
+        try {
+            startLocalProxyServers();
+            if (!localProxyStopRequested && hasLocalProxyServersRunning()) {
+                boolean initialCascadeCheck = checkCascadeThroughLocalProxies();
+                settings.setRuntimeRemoteProxyStatus(
+                    initialCascadeCheck ? LocalSettings.STATUS_CONNECTED : LocalSettings.STATUS_UNREACHABLE
+                );
+                startCascadeHealthChecks();
+            } else {
+                settings.setProxyRunning(false);
+                settings.setRuntimeProxyMode(LocalSettings.PROXY_MODE_STOPPED);
+                settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_INACTIVE);
+            }
+            updateNotification();
+        } catch (Exception e) {
+            Timber.tag("MapService").e(e, "Failed to start local proxy servers");
+            SstpConnectionLog.logError("MapService", "Failed to start local proxy servers", e);
+            stopLocalProxyOnly();
+            settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_ERROR);
+            showErrorNotification("Ошибка запуска прокси: " + e.getMessage());
+        } finally {
+            if (Thread.currentThread() == startupThread) {
+                startupThread = null;
+            }
+        }
+    }
+
+    private void startSstp() {
+        sstpStopRequested = false;
+        settings.setRuntimeSstpStatus(
+            settings.isSstpEnabled() ? LocalSettings.STATUS_CONNECTING : LocalSettings.STATUS_DISABLED
+        );
+
+        try {
+            if (settings.isSstpConnectionLoggingEnabled()) {
+                SstpConnectionLog.startSession(settings);
+                SstpConnectionLog.log("MapService", "Starting SSTP connect flow");
+            } else {
+                SstpConnectionLog.clear();
+            }
+            SstpController.Result sstpResult = sstpController.connect(
+                settings,
+                MapVpnService.Companion.getActiveInstance(),
+                (status, detail) -> {
+                    if (!sstpStopRequested) {
+                        settings.setRuntimeSstpStatus(status);
+                    }
+                    Timber.tag("MapService").i("SSTP status: %s (%s)", status, detail);
+                    SstpConnectionLog.log("MapService", "SSTP status=" + status + " detail=" + detail);
+                    updateNotification();
+                }
+            );
+            SstpConnectionLog.log(
+                "MapService",
+                "SSTP connect result status=" + sstpResult.getStatus() + " tunnelReady=" + sstpResult.isTunnelReady()
+            );
+            if (sstpResult.isTunnelReady()) {
+                MapVpnService activeVpn = MapVpnService.Companion.getActiveInstance();
+                if (activeVpn != null) {
+                    activeVpn.logActiveRouteState();
+                } else {
+                    SstpConnectionLog.log("MapService", "VPN route state unavailable: VPN service instance is null");
+                }
+            }
+            settings.setRuntimeSstpStatus(sstpStopRequested ? getInactiveSstpStatus() : sstpResult.getStatus());
+            updateNotification();
+        } catch (Exception e) {
+            Timber.tag("MapService").e(e, "Failed to start SSTP client");
+            SstpConnectionLog.logError("MapService", "Failed to start SSTP client", e);
+            if (!sstpStopRequested) {
+                settings.setRuntimeSstpStatus(LocalSettings.STATUS_ERROR);
+            }
+            showErrorNotification("Ошибка запуска SSTP: " + e.getMessage());
+        } finally {
+            if (Thread.currentThread() == startupThread) {
+                startupThread = null;
+            }
+            stopSelfIfIdle();
+        }
+    }
+
+    private void startLocalProxyServers() throws IOException {
+        List<ProxyNode> socks5Chain = null;
+        if (settings.isSocks5Enabled()) {
+            socks5Chain = buildSocks5Chain();
+            if (socks5Chain == null || socks5Chain.isEmpty()) {
+                throw new IOException("SOCKS5 upstream не настроен: passthrough отключен");
+            }
+        }
+
+        List<ProxyNode> httpChain = null;
+        if (settings.isHttpEnabled()) {
+            httpChain = buildHttpChain();
+            if (httpChain == null || httpChain.isEmpty()) {
+                throw new IOException("HTTP upstream не настроен: passthrough отключен");
+            }
+        }
+
+        if (localProxyStopRequested) {
+            return;
+        }
+
+        if (settings.isSocks5Enabled()) {
+            socks5Server = new ProxyServer(this);
+            socks5Server.start(
+                settings.getSocks5BindAddress(),
+                settings.getSocks5Port(),
+                Protocol.SOCKS5,
+                socks5Chain,
+                getLocalProxyCredentials()
+            );
+            SstpConnectionLog.log(
+                "MapService",
+                "Local SOCKS5 proxy started on " + settings.getSocks5BindAddress() + ":" + settings.getSocks5Port()
+            );
+            try {
+                verifyLocalSocks5(
+                    settings.getSocks5BindAddress(),
+                    settings.getSocks5Port()
+                );
+            } catch (IOException e) {
+                // Local proxy is already bound; don't fail startup on best-effort diagnostic probe.
+                Timber.tag("MapService").w(e, "SOCKS5 local health check failed, continuing startup");
+                SstpConnectionLog.logError("MapService", "SOCKS5 local health check failed", e);
+            }
+        }
+
+        if (localProxyStopRequested) {
+            stopProxyServersOnly();
+            return;
+        }
+
+        if (settings.isHttpEnabled()) {
+            httpServer = new ProxyServer(this);
+            httpServer.start(
+                settings.getHttpBindAddress(),
+                settings.getHttpPort(),
+                Protocol.HTTP,
+                httpChain,
+                getLocalProxyCredentials()
+            );
+            SstpConnectionLog.log(
+                "MapService",
+                "Local HTTP proxy started on " + settings.getHttpBindAddress() + ":" + settings.getHttpPort()
+            );
         }
     }
 
@@ -546,6 +696,8 @@ public class MapService extends Service {
      */
     private void stopProxies() {
         cancelStartupIfRunning();
+        localProxyStopRequested = true;
+        sstpStopRequested = true;
         stopCascadeHealthChecks();
         if (sstpController != null) {
             sstpController.disconnect();
@@ -558,6 +710,55 @@ public class MapService extends Service {
         }
         stopProxyServersOnly();
         settings.resetRuntimeState();
+    }
+
+    private void stopLocalProxyOnly() {
+        localProxyStopRequested = true;
+        stopCascadeHealthChecks();
+        stopProxyServersOnly();
+        settings.setProxyRunning(false);
+        settings.setRuntimeProxyMode(LocalSettings.PROXY_MODE_STOPPED);
+        settings.setRuntimeRemoteProxyStatus(LocalSettings.STATUS_INACTIVE);
+        SstpConnectionLog.log("MapService", "Local proxy stopped by user");
+        updateNotification();
+    }
+
+    private void stopSstpOnly() {
+        sstpStopRequested = true;
+        if (sstpController != null) {
+            sstpController.disconnect();
+        }
+        try {
+            Intent vpnIntent = new Intent(this, MapVpnService.class);
+            vpnIntent.putExtra(MapVpnService.EXTRA_ACTION, MapVpnService.ACTION_STOP);
+            startService(vpnIntent);
+        } catch (Exception ignored) {
+        }
+        settings.setRuntimeSstpStatus(getInactiveSstpStatus());
+        SstpConnectionLog.log("MapService", "SSTP client stopped by user");
+        updateNotification();
+    }
+
+    private void stopSelfIfIdle() {
+        if (!hasLocalProxyServersRunning() && !isSstpRuntimeActive()) {
+            stopSelf();
+        }
+    }
+
+    private boolean hasLocalProxyServersRunning() {
+        return socks5Server != null || httpServer != null;
+    }
+
+    private boolean isSstpRuntimeActive() {
+        String status = settings.getRuntimeSstpStatus();
+        return LocalSettings.STATUS_CONNECTED.equals(status)
+            || LocalSettings.STATUS_CONNECTING.equals(status)
+            || LocalSettings.STATUS_RECONNECTING.equals(status)
+            || LocalSettings.STATUS_WAITING.equals(status);
+    }
+
+    private String getInactiveSstpStatus() {
+        return settings.isSstpEnabled() ? LocalSettings.STATUS_INACTIVE : LocalSettings.STATUS_DISABLED;
     }
 
     private void stopProxyServersOnly() {
