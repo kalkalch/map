@@ -20,8 +20,8 @@ android {
         applicationId = "com.map"
         minSdk = 21
         targetSdk = 34
-        versionCode = 20
-        versionName = "0.2.3"
+        versionCode = 21
+        versionName = "0.2.4"
         buildConfigField(
             "String",
             "UPDATE_METADATA_URL",

@@ -58,7 +58,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var switchAutoUpdateCheck: SwitchMaterial
 
     // SSTP views
-    private lateinit var switchSstpEnabled: SwitchMaterial
     private lateinit var editSstpHost: EditText
     private lateinit var editSstpPort: EditText
     private lateinit var editSstpUser: EditText
@@ -142,7 +141,6 @@ class SettingsActivity : AppCompatActivity() {
         editProxyHealthcheckIntervalSec = findViewById(R.id.edit_proxy_healthcheck_interval_sec)
         switchAutoUpdateCheck = findViewById(R.id.switch_auto_update_check)
 
-        switchSstpEnabled = findViewById(R.id.switch_sstp_enabled)
         editSstpHost = findViewById(R.id.edit_sstp_host)
         editSstpPort = findViewById(R.id.edit_sstp_port)
         editSstpUser = findViewById(R.id.edit_sstp_user)
@@ -260,7 +258,6 @@ class SettingsActivity : AppCompatActivity() {
         editProxyHealthcheckIntervalSec.setText(settings.getProxyHealthcheckIntervalSec().toString())
         switchAutoUpdateCheck.isChecked = settings.isAutoUpdateCheckEnabled()
 
-        switchSstpEnabled.isChecked = settings.isSstpEnabled()
         editSstpHost.setText(settings.getSstpHost())
         editSstpPort.setText(settings.getSstpPort().toString())
         editSstpUser.setText(settings.getSstpUser())
@@ -388,9 +385,8 @@ class SettingsActivity : AppCompatActivity() {
         }
         settings.setAutoUpdateCheckEnabled(switchAutoUpdateCheck.isChecked)
 
-        settings.setSstpEnabled(switchSstpEnabled.isChecked)
         val sstpHost = editSstpHost.text.toString()
-        if (switchSstpEnabled.isChecked && sstpHost.isBlank()) {
+        if (settings.isSstpEnabled() && sstpHost.isBlank()) {
             showToast("Укажите адрес SSTP сервера")
             hasError = true
         }

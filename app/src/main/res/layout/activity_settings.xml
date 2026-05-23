@@ -459,7 +459,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
         
-        <!-- VPN (SSTP) -->
+        <!-- VPN -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/card_vpn"
             android:layout_width="match_parent"
@@ -484,7 +484,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="VPN (SSTP)"
+                        android:text="VPN"
                         android:textSize="18sp"
                         android:textStyle="bold" />
                     <ImageView
@@ -504,12 +504,6 @@
                     android:padding="16dp"
                     android:paddingTop="0dp"
                     android:visibility="gone">
-                    
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/switch_sstp_enabled"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Включить SSTP" />
                     
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="match_parent"

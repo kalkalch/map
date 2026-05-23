@@ -22,6 +22,8 @@
     <!-- Buttons -->
     <string name="btn_start">Запустить</string>
     <string name="btn_stop">Остановить</string>
+    <string name="switch_proxy">Включить Proxy</string>
+    <string name="switch_vpn">Включить VPN</string>
     <string name="btn_settings">Настройки</string>
     <string name="btn_about">О приложении</string>
     <string name="btn_save">Сохранить</string>
@@ -34,6 +36,9 @@
     <!-- Success messages -->
     <string name="success_started">Прокси запущен</string>
     <string name="success_stopped">Прокси остановлен</string>
+    <string name="success_proxy_stopped">Встроенный прокси остановлен</string>
+    <string name="success_sstp_started">VPN (SSTP) запускается</string>
+    <string name="success_sstp_stopped">VPN (SSTP) остановлен</string>
     <string name="success_saved">Настройки сохранены</string>
     <string name="update_checking">Проверка обновлений...</string>
     <string name="update_not_available">У вас установлена актуальная версия</string>
